@@ -9,11 +9,16 @@ uploaded_file = st.file_uploader("Upload Excel File", type=["xlsm", "xlsx"])
 
 if uploaded_file:
 
-    projects_df = pd.read_excel(uploaded_file, sheet_name="Projects")
-    damages_df = pd.read_excel(uploaded_file, sheet_name="Damages")
-    pw_df = pd.read_excel(uploaded_file, sheet_name="PW")
-    validation_df = pd.read_excel(uploaded_file, sheet_name="Validation (Vlookup)")
+    with st.spinner("Reading Excel file..."):
+        xls = pd.ExcelFile(uploaded_file)
+        projects_df = pd.read_excel(xls, "Projects")
+        damages_df = pd.read_excel(xls, "Damages")
+        pw_df = pd.read_excel(xls, "PW")
+        validation_df = pd.read_excel(xls, "Validation (Vlookup)")
 
+    st.success("Excel loaded successfully")
+
+    # --- VALIDATION LOGIC ---
     validation_df = validation_df.merge(
         projects_df[['Project Number', 'Applicant', 'Disaster']],
         on='Project Number',
@@ -52,21 +57,26 @@ if uploaded_file:
 
     st.dataframe(validation_df)
 
+    # --- SAVE OUTPUT ---
     output_file = "Validation_Result.xlsx"
     validation_df.to_excel(output_file, index=False)
 
-    wb = load_workbook(output_file)
-    ws = wb.active
+    # Highlight errors
+    with st.spinner("Formatting output file..."):
+        wb = load_workbook(output_file)
+        ws = wb.active
+        red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
+        error_col_index = list(validation_df.columns).index("ERROR") + 1
 
-    red_fill = PatternFill(start_color="FF9999", end_color="FF9999", fill_type="solid")
-    error_col_index = list(validation_df.columns).index("ERROR") + 1
+        for row in range(2, ws.max_row + 1):
+            if ws.cell(row=row, column=error_col_index).value:
+                for col in range(1, ws.max_column + 1):
+                    ws.cell(row=row, column=col).fill = red_fill
 
-    for row in range(2, ws.max_row + 1):
-        if ws.cell(row=row, column=error_col_index).value:
-            for col in range(1, ws.max_column + 1):
-                ws.cell(row=row, column=col).fill = red_fill
+        wb.save(output_file)
 
-    wb.save(output_file)
+    st.success("Validation complete")
 
     with open(output_file, "rb") as f:
-        st.download_button("📥 Download Validated File", f, file_name=output_file)
+        st.download_button("Download Validated File", f, file_name=output_file)
+
